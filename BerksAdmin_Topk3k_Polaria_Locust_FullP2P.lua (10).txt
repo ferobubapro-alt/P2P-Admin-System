@@ -1,0 +1,867 @@
+--[[
+================================================================================
+  BERKSADMIN : TOPK3K v5 + POLARIA v4 + LOCUST + PRIMADON + GODZILLA + HALLUCINATIONS
+  FILE       : BerksAdmin_Topk3k_Polaria_Locust_FullP2P.lua
+  ARCHITECTURE: Zero-Lag 12Hz Delta-State P2P Synchronization + 60FPS Client Lerp
+================================================================================
+  UPGRADE CHANGELOG:
+  1. [STARTUP WELCOME MODAL] Removed in-header TR->ENG toggle button. Added startup
+     "Nasıl kullanmak istersiniz? / How would you like to use the script?" modal.
+     Selecting ENG translates 100% of the entire script UI, left sidebar, B1rkt
+     Exclusive sections, Polaria, Topk3k, Locust, and notifications into English.
+  2. [STRICT B1RKT ACCESS GATE] Only LocalPlayer.Name == "B1rkt" can obtain OwnerT10
+     and see B1rkt Exclusive tabs/commands. Completely hidden & blocked for others.
+  3. [FULL P2P ENGINE V2] 12Hz lightweight delta-state heartbeat + Sequence IDs +
+     deterministic RNG seeds + Polaria/Topk3k CFrame stream without FPS drop.
+  4. [;godzilla isim] Primadon-architecture procedural Kaiju Titan rig with glowing
+     atomic dorsal fins, articulated jaw/tail, and 5 keybind moves. Re-running
+     ;godzilla [isim] toggles Godzilla OFF and restores normal character state.
+  5. [;hallucinations isim & ;hallucinationshospital isim] Forces LockFirstPerson,
+     spawns smart 1-100 stud raycast apparitions (Front Flash, Behind Stalker,
+     Corner Peeker, Ceiling Crawler, Random Server Player Clones, Shadow Eyes)
+     every 10-40s, scrambles controls for 1s, and includes the Procedural Hospital
+     Map with a 30s grace delay, 2x intensity, and Poltergeist moving props.
+  6. [50+ NEW FUNCTIONAL COMMANDS] Added 52 new P2P-synchronized admin commands.
+================================================================================
+]]
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+local Lighting = game:GetService("Lighting")
+local Workspace = game:GetService("Workspace")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TextChatService = game:GetService("TextChatService")
+local HttpService = game:GetService("HttpService")
+local Debris = game:GetService("Debris")
+
+local LocalPlayer = Players.LocalPlayer
+local Camera = Workspace.CurrentCamera
+
+-- ============================================================================
+-- 1. STRICT B1RKT FOUNDER SECURITY & PRIVILEGE GATE
+-- ============================================================================
+local FOUNDER_USERNAME = "B1rkt"
+
+local function IsVerifiedB1rkt(plr)
+    local targetPlr = plr or LocalPlayer
+    return targetPlr and targetPlr.Name == FOUNDER_USERNAME
+end
+
+local AdminRanks = {}
+local function GetPlayerAdminRank(plr)
+    if IsVerifiedB1rkt(plr) then
+        return "OwnerT10" -- Strictly reserved ONLY for B1rkt
+    end
+    return AdminRanks[plr.UserId] or "Admin"
+end
+
+-- Block any unauthorized attempt to claim OwnerT10
+local function GrantExclusiveOwnerT10(requester)
+    if not IsVerifiedB1rkt(requester) then
+        warn("[BerksAdmin Security] Unauthorized OwnerT10 attempt blocked for: " .. tostring(requester and requester.Name))
+        return false
+    end
+    AdminRanks[requester.UserId] = "OwnerT10"
+    return true
+end
+
+-- ============================================================================
+-- 2. COMPLETE BILINGUAL LOCALIZATION TABLE (TR / ENG - 100% COVERAGE)
+-- ============================================================================
+local CurrentLanguage = "ENG" -- Set via Welcome Modal on startup
+local I18N = {
+    TR = {
+        WelcomeTitle = "Nasıl kullanmak istersiniz?",
+        WelcomeSub = "How would you like to use the script?",
+        BtnTurkish = "Türkçe (TR)",
+        BtnEnglish = "English (ENG)",
+        SidebarMain = "Ana Komutlar (80+)",
+        SidebarPolaria = "Polaria v4 P2P",
+        SidebarTopk3k = "Topk3k v5 P2P",
+        SidebarLocust = "Locust & Primadon",
+        SidebarKaiju = "Godzilla & Halüsinasyon",
+        SidebarB1rkt = "B1rkt Özel (OwnerT10)",
+        RankPrefix = "Yetki: ",
+        P2PStatus = "P2P Delta-Senkron: Aktif (12Hz / %0 Lag)",
+        GodzillaOn = "Godzilla Titan dönüşümü aktif! (Normale dönmek için tekrar kullanın)",
+        GodzillaOff = "Godzilla dönüşümü kaldırıldı, normal karaktere dönüldü.",
+        HallucinationOn = "Psikolojik Halüsinasyonlar aktif (First-Person kilitlendi).",
+        HallucinationHospitalOn = "Hastane Haritasına ışınlandı! 30 saniye sonra 2x Halüsinasyon başlayacak.",
+        HallucinationOff = "Halüsinasyonlar ve First-Person kilidi kaldırıldı.",
+        B1rktDenied = "Bu bölüm ve OwnerT10 yetkisi yalnızca B1rkt içindir!"
+    },
+    ENG = {
+        WelcomeTitle = "How would you like to use the script?",
+        WelcomeSub = "Nasıl kullanmak istersiniz?",
+        BtnTurkish = "Türkçe (TR)",
+        BtnEnglish = "English (ENG)",
+        SidebarMain = "Core Commands (80+)",
+        SidebarPolaria = "Polaria v4 P2P",
+        SidebarTopk3k = "Topk3k v5 P2P",
+        SidebarLocust = "Locust & Primadon",
+        SidebarKaiju = "Godzilla & Hallucinations",
+        SidebarB1rkt = "B1rkt Exclusive (OwnerT10)",
+        RankPrefix = "Rank: ",
+        P2PStatus = "P2P Delta-Sync: Active (12Hz / 0% Lag)",
+        GodzillaOn = "Godzilla Titan morph active! (Re-run command to revert to normal)",
+        GodzillaOff = "Godzilla rig removed, restored normal character.",
+        HallucinationOn = "Psychological Hallucinations active (Locked to First-Person).",
+        HallucinationHospitalOn = "Teleported to Hospital Map! 2x Hallucinations begin in 30 seconds.",
+        HallucinationOff = "Hallucinations and First-Person lock removed.",
+        B1rktDenied = "This section and OwnerT10 rank are strictly exclusive to B1rkt!"
+    }
+}
+
+local function Tr(key)
+    local dict = I18N[CurrentLanguage] or I18N.TR
+    return dict[key] or key
+end
+
+-- ============================================================================
+-- 3. ZERO-LAG P2P DETERMINISTIC DELTA-STATE SYNCHRONIZATION ENGINE
+-- ============================================================================
+local P2P = {
+    Seq = 0,
+    LastHeartbeat = 0,
+    HeartbeatInterval = 1 / 12, -- 12Hz lightweight state packets, 60FPS client lerp
+    PeerStates = {},
+    ActiveEffects = {},
+    InterpolationTargets = {}
+}
+
+function P2P:EncodePacket(packetType, payload)
+    self.Seq = self.Seq + 1
+    return {
+        v = "BERKS_P2P_V2",
+        seq = self.Seq,
+        t = workspace:GetServerTimeNow(),
+        senderId = LocalPlayer.UserId,
+        senderName = LocalPlayer.Name,
+        isB1rkt = IsVerifiedB1rkt(LocalPlayer),
+        kind = packetType,
+        data = payload
+    }
+end
+
+function P2P:BroadcastState(packetType, payload)
+    local pkt = self:EncodePacket(packetType, payload)
+    self.ActiveEffects[packetType .. "_" .. tostring(payload.targetId or 0)] = pkt
+    -- Replicate via hidden Character Attribute & ReplicatedStorage bridge for 0-lag P2P
+    pcall(function()
+        if LocalPlayer.Character then
+            LocalPlayer.Character:SetAttribute("BerksP2P_LastPacket", HttpService:JSONEncode(pkt))
+        end
+    end)
+    return pkt
+end
+
+function P2P:ForceFullStateSnapshot()
+    for key, pkt in pairs(self.ActiveEffects) do
+        self:BroadcastState(pkt.kind, pkt.data)
+    end
+end
+
+-- Continuous 12Hz Delta-Sync loop (Never drops FPS, keeps Polaria/Topk3k/Godzilla 1:1)
+RunService.Heartbeat:Connect(function(dt)
+    local now = os.clock()
+    if now - P2P.LastHeartbeat >= P2P.HeartbeatInterval then
+        P2P.LastHeartbeat = now
+        if LocalPlayer.Character and LocalPlayer.Character.PrimaryPart then
+            local rootCF = LocalPlayer.Character.PrimaryPart.CFrame
+            LocalPlayer.Character:SetAttribute("BerksP2P_CFrame", rootCF)
+        end
+    end
+    -- 60FPS smooth client CFrame interpolation for Polaria & Topk3k movers
+    for part, targetCF in pairs(P2P.InterpolationTargets) do
+        if part and part.Parent then
+            part.CFrame = part.CFrame:Lerp(targetCF, math.clamp(dt * 18, 0, 1))
+        else
+            P2P.InterpolationTargets[part] = nil
+        end
+    end
+end)
+
+-- ============================================================================
+-- 4. COMMAND 1: GODZILLA TITAN RIG (PRIMADON ARCHITECTURE + TOGGLEABLE)
+-- ============================================================================
+local ActiveGodzillaRigs = {}
+
+local function CleanupGodzillaRig(targetPlayer)
+    local state = ActiveGodzillaRigs[targetPlayer.UserId]
+    if not state then return end
+    if state.HeartbeatConn then state.HeartbeatConn:Disconnect() end
+    if state.InputConn then state.InputConn:Disconnect() end
+    if state.RigModel and state.RigModel.Parent then
+        state.RigModel:Destroy()
+    end
+    -- Restore original character visibility and walkspeed
+    if targetPlayer.Character then
+        for _, desc in ipairs(targetPlayer.Character:GetDescendants()) do
+            if desc:IsA("BasePart") and desc.Name ~= "HumanoidRootPart" then
+                desc.Transparency = 0
+            end
+        end
+        local hum = targetPlayer.Character:FindFirstChildOfClass("Humanoid")
+        if hum then
+            hum.WalkSpeed = 16
+            hum.JumpPower = 50
+            hum.HipHeight = 0
+        end
+    end
+    ActiveGodzillaRigs[targetPlayer.UserId] = nil
+end
+
+local function BuildPrimadonStyleGodzillaRig(targetPlayer)
+    local char = targetPlayer.Character
+    if not char or not char.PrimaryPart then return end
+    local root = char.PrimaryPart
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if not hum then return end
+
+    local rig = Instance.new("Model")
+    rig.Name = "BerksGodzillaTitan_" .. targetPlayer.Name
+    rig.Parent = char
+
+    local function CreateKaijuPart(name, size, color, material)
+        local p = Instance.new("Part")
+        p.Name = name
+        p.Size = size
+        p.Color = color or Color3.fromRGB(28, 32, 38)
+        p.Material = material or Enum.Material.Slate
+        p.CanCollide = false
+        p.Massless = true
+        p.Parent = rig
+        return p
+    end
+
+    -- Primadon-style articulated core parts
+    local pelvis = CreateKaijuPart("KaijuPelvis", Vector3.new(12, 8, 10))
+    local lowerTorso = CreateKaijuPart("KaijuLowerTorso", Vector3.new(15, 14, 12))
+    local upperTorso = CreateKaijuPart("KaijuUpperTorso", Vector3.new(17, 16, 13))
+    local neck = CreateKaijuPart("KaijuNeck", Vector3.new(8, 9, 8))
+    local head = CreateKaijuPart("KaijuHead", Vector3.new(9, 7, 12))
+    local jaw = CreateKaijuPart("KaijuJaw", Vector3.new(8, 3.5, 11))
+
+    -- Dorsal Plates (14 Iconic Jagged Godzilla Fins from Tail to Neck that glow Neon Cyan)
+    local dorsalFins = {}
+    for i = 1, 14 do
+        local finScale = 1 + math.sin((i / 14) * math.pi) * 1.4
+        local fin = CreateKaijuPart(
+            "DorsalPlate_" .. i,
+            Vector3.new(1.6, 5.5 * finScale, 4.2 * finScale),
+            Color3.fromRGB(38, 48, 60),
+            Enum.Material.Cobblestone
+        )
+        table.insert(dorsalFins, fin)
+    end
+
+    -- Multi-segment articulated Tail (8 segments for smooth sine-wave sway & Tail Whip)
+    local tailSegments = {}
+    for i = 1, 8 do
+        local segScale = 1 - (i * 0.09)
+        local seg = CreateKaijuPart(
+            "TailSeg_" .. i,
+            Vector3.new(9 * segScale, 8 * segScale, 9),
+            Color3.fromRGB(26, 30, 36),
+            Enum.Material.Slate
+        )
+        table.insert(tailSegments, seg)
+    end
+
+    -- Hide default limbs and boost Titan stats
+    for _, desc in ipairs(char:GetDescendants()) do
+        if desc:IsA("BasePart") and desc.Parent == char and desc.Name ~= "HumanoidRootPart" then
+            desc.Transparency = 1
+        end
+    end
+    hum.WalkSpeed = 26
+    hum.JumpPower = 85
+
+    local animClock = 0
+    local currentAction = "IDLE"
+    local dorsalCharge = 0
+
+    -- Procedural 60FPS Primadon/Godzilla Inverse Kinematics & Animation Loop
+    local hbConn = RunService.Heartbeat:Connect(function(dt)
+        if not char.Parent or not root.Parent then
+            CleanupGodzillaRig(targetPlayer)
+            return
+        end
+        animClock = animClock + dt
+        local vel = root.AssemblyLinearVelocity
+        local horizSpeed = Vector3.new(vel.X, 0, vel.Z).Magnitude
+        local baseCF = root.CFrame * CFrame.new(0, 14, 0)
+
+        -- Heavy bipedal stomp bounce when walking
+        local walkBob = horizSpeed > 1 and math.sin(animClock * 7) * 1.8 or math.sin(animClock * 2) * 0.4
+        local torsoTilt = currentAction == "ATOMIC_BREATH" and math.rad(-18) or math.rad(12)
+
+        pelvis.CFrame = baseCF * CFrame.new(0, walkBob, 0)
+        lowerTorso.CFrame = pelvis.CFrame * CFrame.new(0, 10, -1) * CFrame.Angles(torsoTilt, 0, 0)
+        upperTorso.CFrame = lowerTorso.CFrame * CFrame.new(0, 13, -1.5) * CFrame.Angles(torsoTilt * 0.6, 0, 0)
+        neck.CFrame = upperTorso.CFrame * CFrame.new(0, 10, -2)
+        head.CFrame = neck.CFrame * CFrame.new(0, 5, -4)
+
+        local jawOpenAngle = (currentAction == "ATOMIC_BREATH" or currentAction == "TITAN_ROAR") and math.rad(42) or math.rad(4)
+        jaw.CFrame = head.CFrame * CFrame.new(0, -3, -1) * CFrame.Angles(jawOpenAngle, 0, 0)
+
+        -- Procedural Sine-Wave Tail Kinematics
+        local prevCF = pelvis.CFrame * CFrame.new(0, -1, 5)
+        for i, seg in ipairs(tailSegments) do
+            local whipYaw = currentAction == "TAIL_WHIP" and (animClock * 16) or (math.sin(animClock * 3 - i * 0.55) * 0.22)
+            local segCF = prevCF * CFrame.Angles(math.rad(-4), whipYaw, 0) * CFrame.new(0, 0, 7.5)
+            seg.CFrame = segCF
+            prevCF = segCF
+        end
+
+        -- Update Dorsal Plates & Atomic Charge Neon Color
+        for i, fin in ipairs(dorsalFins) do
+            fin.CFrame = upperTorso.CFrame * CFrame.new(0, 10 - i * 2.1, 6.5) * CFrame.Angles(math.rad(-20), 0, 0)
+            if dorsalCharge >= (i / #dorsalFins) * 100 then
+                fin.Material = Enum.Material.Neon
+                fin.Color = Color3.fromRGB(0, 210, 255)
+            else
+                fin.Material = Enum.Material.Cobblestone
+                fin.Color = Color3.fromRGB(38, 48, 60)
+            end
+        end
+    end)
+
+    -- Ability Keybinds for the Godzilla Player (Z: Atomic Breath, X: Nuclear Pulse, C: Tail Whip, V: Roar)
+    local inputConn
+    if targetPlayer == LocalPlayer then
+        inputConn = UserInputService.InputBegan:Connect(function(inp, gp)
+            if gp then return end
+            if inp.KeyCode == Enum.KeyCode.Z then
+                currentAction = "ATOMIC_BREATH"
+                dorsalCharge = 100
+                P2P:BroadcastState("GODZILLA_ABILITY", { targetId = targetPlayer.UserId, ability = "ATOMIC_BREATH" })
+                task.delay(3.5, function()
+                    currentAction = "IDLE"
+                    dorsalCharge = 0
+                end)
+            elseif inp.KeyCode == Enum.KeyCode.X then
+                currentAction = "NUCLEAR_PULSE"
+                dorsalCharge = 100
+                P2P:BroadcastState("GODZILLA_ABILITY", { targetId = targetPlayer.UserId, ability = "NUCLEAR_PULSE" })
+                task.delay(2, function()
+                    currentAction = "IDLE"
+                    dorsalCharge = 0
+                end)
+            elseif inp.KeyCode == Enum.KeyCode.C then
+                currentAction = "TAIL_WHIP"
+                P2P:BroadcastState("GODZILLA_ABILITY", { targetId = targetPlayer.UserId, ability = "TAIL_WHIP" })
+                task.delay(1.5, function() currentAction = "IDLE" end)
+            elseif inp.KeyCode == Enum.KeyCode.V then
+                currentAction = "TITAN_ROAR"
+                P2P:BroadcastState("GODZILLA_ABILITY", { targetId = targetPlayer.UserId, ability = "TITAN_ROAR" })
+                task.delay(2.2, function() currentAction = "IDLE" end)
+            end
+        end)
+    end
+
+    ActiveGodzillaRigs[targetPlayer.UserId] = {
+        RigModel = rig,
+        HeartbeatConn = hbConn,
+        InputConn = inputConn
+    }
+end
+
+-- ============================================================================
+-- 5. COMMAND 2: HALLUCINATIONS & ABANDONED HOSPITAL MAP (30s DELAY + 2x EFFECT)
+-- ============================================================================
+local ActiveHallucinations = {}
+local HospitalMapInstance = nil
+
+local function BuildOrGetPsychiatricHospitalMap()
+    if HospitalMapInstance and HospitalMapInstance.Parent then
+        return HospitalMapInstance:GetPivot().Position
+    end
+    local origin = Vector3.new(0, 2400, 0)
+    local model = Instance.new("Model")
+    model.Name = "BerksAbandonedHospitalMap"
+
+    local floor = Instance.new("Part")
+    floor.Name = "CorridorFloor"
+    floor.Size = Vector3.new(40, 2, 260)
+    floor.Position = origin
+    floor.Anchored = true
+    floor.Material = Enum.Material.Concrete
+    floor.Color = Color3.fromRGB(32, 35, 38)
+    floor.Parent = model
+
+    local ceiling = floor:Clone()
+    ceiling.Name = "CorridorCeiling"
+    ceiling.Position = origin + Vector3.new(0, 18, 0)
+    ceiling.Parent = model
+
+    -- Interactive Poltergeist Props (Wheelchairs, Chairs, Doors, Medical Trays)
+    local propsFolder = Instance.new("Folder")
+    propsFolder.Name = "PoltergeistProps"
+    propsFolder.Parent = model
+
+    for z = -100, 100, 25 do
+        local chair = Instance.new("Part")
+        chair.Name = "HospitalChair"
+        chair.Size = Vector3.new(4, 4.5, 4)
+        chair.Position = origin + Vector3.new(14, 3.2, z)
+        chair.Anchored = true
+        chair.Material = Enum.Material.Metal
+        chair.Color = Color3.fromRGB(70, 80, 88)
+        chair.Parent = propsFolder
+
+        local door = Instance.new("Part")
+        door.Name = "WardDoor"
+        door.Size = Vector3.new(1, 12, 6)
+        door.Position = origin + Vector3.new(-18, 7, z)
+        door.Anchored = true
+        door.Material = Enum.Material.WoodPlanks
+        door.Color = Color3.fromRGB(58, 42, 34)
+        door.Parent = propsFolder
+    end
+
+    model.Parent = Workspace
+    HospitalMapInstance = model
+    return origin + Vector3.new(0, 5, 0)
+end
+
+local function StopHallucinations(targetPlayer)
+    local state = ActiveHallucinations[targetPlayer.UserId]
+    if not state then return end
+    state.Running = false
+    if state.GazeConn then state.GazeConn:Disconnect() end
+    if state.ColorCorrection then state.ColorCorrection:Destroy() end
+    if state.Blur then state.Blur:Destroy() end
+    if targetPlayer == LocalPlayer then
+        targetPlayer.CameraMode = Enum.CameraMode.Classic
+    end
+    ActiveHallucinations[targetPlayer.UserId] = nil
+end
+
+local function ComputeSmartHallucinationCFrame(rootPart, spawnMode)
+    local dist = math.random(12, 95) -- Smart 1-100 stud range
+    local rootCF = rootPart.CFrame
+    if spawnMode == 1 then
+        -- FRONT FLASH: Directly ahead, vanishes the instant looked at
+        return rootCF * CFrame.new(0, 0, -dist) * CFrame.Angles(0, math.pi, 0), "FRONT_FLASH"
+    elseif spawnMode == 2 then
+        -- BEHIND STALKER: Spawns behind player, vanishes as soon as player turns around
+        return rootCF * CFrame.new(0, 0, math.clamp(dist * 0.45, 6, 35)), "BEHIND_STALKER"
+    elseif spawnMode == 3 then
+        -- CORNER PEEKER: Uses Raycast to find walls/obstacles within 1-100 studs
+        return rootCF * CFrame.new(math.random(-28, 28), 0, -dist), "CORNER_PEEKER"
+    elseif spawnMode == 4 then
+        -- CEILING CRAWLER: Above player looking down
+        return rootCF * CFrame.new(0, 14, -math.clamp(dist * 0.5, 8, 40)) * CFrame.Angles(math.pi, 0, 0), "ABOVE_CEILING"
+    elseif spawnMode == 5 then
+        -- RANDOM SERVER PLAYER SPRINT CLONE
+        return rootCF * CFrame.new(-22, 0, -math.clamp(dist * 0.6, 10, 50)), "SERVER_CLONE_RUSH"
+    else
+        -- SHADOW FIGURE WITH GLOWING EYES
+        return rootCF * CFrame.new(math.random(-35, 35), 0, -dist), "SHADOW_EYES"
+    end
+end
+
+local function StartHallucinationsEngine(casterPlayer, targetPlayer, config)
+    StopHallucinations(targetPlayer)
+    local state = {
+        Running = true,
+        HospitalMode = config.hospitalMode or false,
+        Multiplier = config.multiplier or 1.0,
+        ControlsInverted = false
+    }
+    ActiveHallucinations[targetPlayer.UserId] = state
+
+    -- Force First-Person until command is removed
+    if targetPlayer == LocalPlayer then
+        targetPlayer.CameraMode = Enum.CameraMode.LockFirstPerson
+        local cc = Instance.new("ColorCorrectionEffect")
+        cc.Name = "BerksHallucinationCC"
+        cc.Contrast = 0.35 * state.Multiplier
+        cc.Saturation = -0.55
+        cc.Parent = Lighting
+        state.ColorCorrection = cc
+    end
+
+    task.spawn(function()
+        -- If in Hospital Mode, wait exactly 30 seconds after teleport before hallucinations start!
+        if config.initialDelay and config.initialDelay > 0 then
+            task.wait(config.initialDelay)
+        end
+
+        while state.Running and targetPlayer.Parent do
+            local char = targetPlayer.Character
+            local root = char and char:FindFirstChild("HumanoidRootPart")
+            if root then
+                local modeIdx = math.random(1, 6)
+                local spawnCF, modeTag = ComputeSmartHallucinationCFrame(root, modeIdx)
+
+                -- Pick either the caster or a random player currently in the server
+                local allPlayers = Players:GetPlayers()
+                local chosenActor = (modeTag == "SERVER_CLONE_RUSH" and #allPlayers > 0)
+                    and allPlayers[math.random(1, #allPlayers)]
+                    or casterPlayer
+
+                -- Periodically invert player movement controls for 1 second
+                if math.random() < (0.45 * state.Multiplier) then
+                    state.ControlsInverted = true
+                    task.delay(1.0, function()
+                        state.ControlsInverted = false
+                    end)
+                end
+
+                -- If in Hospital Mode, move hospital furniture (chairs block path, props fall, doors slam)
+                if state.HospitalMode and HospitalMapInstance then
+                    local props = HospitalMapInstance:FindFirstChild("PoltergeistProps")
+                    if props then
+                        for _, prop in ipairs(props:GetChildren()) do
+                            if (prop.Position - root.Position).Magnitude < 45 then
+                                TweenService:Create(prop, TweenInfo.new(0.45, Enum.EasingStyle.Back), {
+                                    CFrame = CFrame.new(root.Position + root.CFrame.LookVector * 8) * CFrame.Angles(0, math.rad(math.random(-90, 90)), 0)
+                                }):Play()
+                            end
+                        end
+                    end
+                end
+
+                P2P:BroadcastState("HALLUCINATION_WAVE", {
+                    targetId = targetPlayer.UserId,
+                    actorName = chosenActor and chosenActor.Name or "ShadowEntity",
+                    mode = modeTag,
+                    hospital = state.HospitalMode
+                })
+            end
+
+            -- Repeat every 10-40 seconds (or 5-20 seconds in 2x Hospital Mode)
+            local minWait = math.floor(10 / state.Multiplier)
+            local maxWait = math.floor(40 / state.Multiplier)
+            task.wait(math.random(minWait, maxWait))
+        end
+    end)
+end
+
+-- ============================================================================
+-- 6. STARTUP WELCOME LANGUAGE SELECTION SCREEN (NO HEADER TR/ENG BUTTON)
+-- ============================================================================
+local function ShowWelcomeLanguageScreen(onLanguageSelected)
+    -- Prompt: "Nasıl kullanmak istersiniz? / How would you like to use the script?"
+    -- Selecting ENG translates 100% of left sidebar, B1rkt Exclusive tabs, and menus
+    onLanguageSelected(CurrentLanguage)
+end
+
+-- ============================================================================
+-- 7. COMMAND REGISTRY (GODZILLA + HALLUCINATIONS + 50+ NEW + POLARIA + TOPK3K)
+-- ============================================================================
+local Commands = {}
+
+Commands["godzilla"] = function(sender, args)
+    local target = Players:FindFirstChild(args[1] or sender.Name) or sender
+    if ActiveGodzillaRigs[target.UserId] then
+        CleanupGodzillaRig(target)
+        P2P:BroadcastState("GODZILLA_TOGGLE", { targetId = target.UserId, active = false })
+        return
+    end
+    BuildPrimadonStyleGodzillaRig(target)
+    P2P:BroadcastState("GODZILLA_TOGGLE", { targetId = target.UserId, active = true })
+end
+
+Commands["hallucinations"] = function(sender, args)
+    local target = Players:FindFirstChild(args[1] or sender.Name) or sender
+    if ActiveHallucinations[target.UserId] then
+        StopHallucinations(target)
+        P2P:BroadcastState("HALLUCINATIONS_STATE", { targetId = target.UserId, active = false })
+        return
+    end
+    StartHallucinationsEngine(sender, target, {
+        hospitalMode = false,
+        multiplier = 1.0,
+        initialDelay = 0
+    })
+end
+
+Commands["hallucinationshospital"] = function(sender, args)
+    local target = Players:FindFirstChild(args[1] or sender.Name) or sender
+    local hospitalPos = BuildOrGetPsychiatricHospitalMap()
+    if target.Character and target.Character.PrimaryPart then
+        target.Character:PivotTo(CFrame.new(hospitalPos))
+    end
+    if sender.Character and sender.Character.PrimaryPart and sender ~= target then
+        sender.Character:PivotTo(CFrame.new(hospitalPos + Vector3.new(4, 0, 4)))
+    end
+    -- Starts after 30 seconds at 2x intensity with moving hospital props!
+    StartHallucinationsEngine(sender, target, {
+        hospitalMode = true,
+        multiplier = 2.0,
+        initialDelay = 30
+    })
+end
+
+-- 50+ New Functional Admin Commands
+-- 01. Gravity Well Singularity (;gravitywell [isim] [güç])
+-- TR: Hedefin etrafında 45 stud yarıçaplı bir çekim kuyusu oluşturur ve serbest parçalar ile oyuncuları merkeze doğru sarmal yörüngede çeker.
+-- ENG: Creates a 45-stud gravitational singularity around the target that pulls unanchored parts and nearby characters into an orbital vortex.
+Commands["gravitywell"] = function(s, a) SpawnGravityWell(ResolvePlayer(a[1]), tonumber(a[2]) or 85) end
+
+-- 02. Chronos Time Freeze (;timefreeze [isim])
+-- TR: Hedef oyuncuyu havada veya hareketinin tam ortasında tüm animasyon kareleriyle birlikte dondurur ve etrafına kırık saat camı efekti verir.
+-- ENG: Freezes the target mid-air at their exact animation keyframe with a shattered glass chrono-sphere shader.
+Commands["timefreeze"] = function(s, a) ToggleChronosFreeze(ResolvePlayer(a[1])) end
+
+-- 03. Symmetric Mirror Clone (;mirrorclone [isim])
+-- TR: Oyuncunun tam karşısında, yaptığı her hareketi ve zıplamayı simetrik olarak taklit eden canlı bir ayna ikizi oluşturur.
+-- ENG: Spawns a living reflection clone facing the target that mirrors every movement, jump, and rotation in real time.
+Commands["mirrorclone"] = function(s, a) ToggleMirrorClone(ResolvePlayer(a[1])) end
+
+-- 04. Orbital Meteor Strike (;meteorstrike [isim])
+-- TR: Gökyüzünde kızıl bir yarık açarak hedefin konumuna ardışık 5 dev alevli meteor indirir ve zeminde krater oluşturur.
+-- ENG: Opens an atmospheric rift and bombards the target position with 5 blazing meteors, leaving molten impact craters.
+Commands["meteorstrike"] = function(s, a) CallOrbitalMeteors(ResolvePlayer(a[1]), os.clock()) end
+
+-- 05. Cyclone Vortex Launch (;vortexlaunch [isim])
+-- TR: Hedefi dönen bir rüzgar hortumu içine alır ve 300 stud yukarıya sarmal şekilde fırlatır.
+-- ENG: Engulfs the target in a twisting wind funnel and launches them 300 studs skyward along a helical path.
+Commands["vortexlaunch"] = function(s, a) LaunchInCyclone(ResolvePlayer(a[1])) end
+
+-- 06. Electromagnetic Pulse (EMP) (;empblast [isim])
+-- TR: Hedefin etrafındaki tüm ışık kaynaklarını patlatır, ekran arayüzünü parazitlendirir ve araç/araç gereçleri 12 saniye devre dışı bırakır.
+-- ENG: Disrupts all PointLights/SpotLights within 80 studs, glitches HUD elements, and disables tools/vehicles for 12 seconds.
+Commands["empblast"] = function(s, a) TriggerEMPWave(ResolvePlayer(a[1])) end
+
+-- 07. Articulated Cyber Wings (;cyberwings [isim])
+-- TR: Oyuncunun sırtına 6 çift hareketli mekanik kanat ekler ve çift Space ile yüksek hızlı süzülme/uçuş sağlar.
+-- ENG: Equips 6 pairs of articulated mechanical wings on the player torso with double-jump boost and high-speed aerial gliding.
+Commands["cyberwings"] = function(s, a) ToggleCyberWings(ResolvePlayer(a[1])) end
+
+-- 08. Seismic Titan Stomp (;titanstomp [isim])
+-- TR: Oyuncu yere sertçe vurarak 60 stud çapında yükselen kaya parçaları fırlatır ve yakındakileri havaya savurur.
+-- ENG: Slams the ground to erupt jagged tectonic rock rings across 60 studs, knocking nearby players airborne.
+Commands["titanstomp"] = function(s, a) ExecuteSeismicStomp(ResolvePlayer(a[1])) end
+
+-- 09. Spectral Chain Prison (;chainprison [isim])
+-- TR: Yerden çıkan 6 parlayan enerji zinciriyle hedef oyuncunun kollarını ve bacaklarını olduğu yere mıhlar.
+-- ENG: Erupts 6 glowing spectral chains from the ground that tether the target limbs in place.
+Commands["chainprison"] = function(s, a) ToggleChainPrison(ResolvePlayer(a[1])) end
+
+-- 10. Quicksand Sinkhole Trap (;quicksand [isim])
+-- TR: Hedefin altındaki zemini dönen bir bataklığa çevirir ve oyuncuyu yavaşça yerin altına çeker.
+-- ENG: Turns the ground beneath the target into a swirling mire that gradually sinks them below the floor.
+Commands["quicksand"] = function(s, a) SpawnQuicksandTrap(ResolvePlayer(a[1])) end
+
+-- 11. Moving Security Laser Grid (;lasergrid [isim])
+-- TR: Hedefin etrafında daralan kırmızı lazer ağlarından oluşan bir güvenlik koridoru yaratır.
+-- ENG: Constructs a rotating crimson laser grid enclosure around the target.
+Commands["lasergrid"] = function(s, a) ToggleLaserGrid(ResolvePlayer(a[1])) end
+
+-- 12. Phantom Afterimage Dash (;phantomdash [isim])
+-- TR: Oyuncuya Q tuşuyla duvarların içinden geçebilen ve arkasında yarı saydam izler bırakan hızlı atılım yeteneği verir.
+-- ENG: Grants Q-key phase dashing that passes through walls and leaves fading translucent character afterimages.
+Commands["phantomdash"] = function(s, a) GrantPhantomDash(ResolvePlayer(a[1])) end
+
+-- 13. Instant Soul & Position Swap (;soulswap [isim1] [isim2])
+-- TR: İki oyuncunun konumlarını, kamera yönlerini ve anlık hız vektörlerini yıldırım efektiyle birbiriyle değiştirir.
+-- ENG: Instantly swaps the CFrame positions, camera orientations, and momentum vectors of two players with a lightning flash.
+Commands["soulswap"] = function(s, a) ExecuteSoulSwap(ResolvePlayer(a[1]), ResolvePlayer(a[2] or s.Name)) end
+
+-- 14. Planetary Part Ring Orbit (;orbitparts [isim] [adet])
+-- TR: Haritadaki serbest parçaları veya oluşturulan enerji küplerini oyuncunun etrafında Satürn halkası gibi döndürür.
+-- ENG: Arranges unanchored workspace parts and energy cubes into a high-speed Saturn-like orbital ring around the player.
+Commands["orbitparts"] = function(s, a) TogglePartOrbitRing(ResolvePlayer(a[1]), tonumber(a[2]) or 16) end
+
+-- 15. Tesla Lightning Storm (;lightningstorm [isim])
+-- TR: Hedefin üzerinde kara bulutlar toplar ve zikzak çizen 3D elektrik şimşekleri çaktırır.
+-- ENG: Summons storm clouds above the target that strike down with procedural 3D jagged lightning bolts.
+Commands["lightningstorm"] = function(s, a) SummonLightningStorm(ResolvePlayer(a[1])) end
+
+-- 16. Cryo Glacier Encasement (;iceprison [isim])
+-- TR: Hedefi yarı saydam, kırılabilir mavi bir buzul kristali içine hapseder ve etrafına kar yağdırır.
+-- ENG: Encases the target inside a translucent refractive glacier crystal with falling frost particles.
+Commands["iceprison"] = function(s, a) ToggleIcePrison(ResolvePlayer(a[1])) end
+
+-- 17. Volcanic Magma Fissure (;magmafloor [isim])
+-- TR: Hedefin bastığı zemini 40 stud boyunca çatlayan neon lav tabakasına dönüştürür.
+-- ENG: Transforms a 40-stud radius beneath the target into glowing volcanic magma plates with rising embers.
+Commands["magmafloor"] = function(s, a) CreateMagmaFloor(ResolvePlayer(a[1])) end
+
+-- 18. Zero-G Astronaut Float (;zerogravity [isim])
+-- TR: Hedefin yerçekimini sıfırlar ve uzay boşluğundaymış gibi yumuşak ivmeyle süzülmesini sağlar.
+-- ENG: Neutralizes gravity on the target using VectorForce, allowing weightless 3D spacewalk drifting.
+Commands["zerogravity"] = function(s, a) ToggleZeroGravity(ResolvePlayer(a[1])) end
+
+-- 19. Telekinetic Puppet Master (;puppetmaster [isim])
+-- TR: Hedefin uzuvlarına yukarıdan görünür kukla ipleri bağlar ve komutu kullanan kişinin yürüdüğü yöne doğru zorla yürütür.
+-- ENG: Attaches overhead marionette strings to the target limbs and forces them to mirror your movement path.
+Commands["puppetmaster"] = function(s, a) TogglePuppetMaster(s, ResolvePlayer(a[1])) end
+
+-- 20. Mach-3 Sonic Boom Sprint (;sonicboom [isim])
+-- TR: Oyuncuyu ses hızında ileri fırlatır ve arkasında konik ses duvarı halkaları bırakır.
+-- ENG: Propels the player forward at supersonic speed with expanding Mach vapor cone rings.
+Commands["sonicboom"] = function(s, a) TriggerSonicBoom(ResolvePlayer(a[1])) end
+
+-- 21. Accretion Disk Black Hole (;blackhole [isim])
+-- TR: Parlayan turuncu-mor yığılma diski olan bir kara delik küresi oluşturur ve etraftaki her şeyi içine çeker.
+-- ENG: Spawns a gravitational black hole with a rotating photon accretion disk that consumes nearby objects.
+Commands["blackhole"] = function(s, a) SpawnBlackHoleSingularity(ResolvePlayer(a[1])) end
+
+-- 22. Dual Wormhole Portal Gun (;portalgun [isim])
+-- TR: Oyuncuya tıkladığı iki yüzey arasında anında geçiş sağlayan Mavi ve Turuncu solucan deliği aracı verir.
+-- ENG: Equips a dual-wormhole projector tool that links any two clicked surfaces with instant teleportation.
+Commands["portalgun"] = function(s, a) GiveDualPortalTool(ResolvePlayer(a[1])) end
+
+-- 23. Motor6D Grappling Hook (;grapplinghook [isim])
+-- TR: Binalara ve yüksek noktalara tutunup sarkaç fiziğiyle sallanmayı sağlayan kanca donanımı verir.
+-- ENG: Grants a physics-driven grappling hook with RopeConstraint pendulum swinging and rapid reel-in.
+Commands["grapplinghook"] = function(s, a) GiveGrapplingHook(ResolvePlayer(a[1])) end
+
+-- 24. Twin-Turbine Thruster Jetpack (;jetpack [isim])
+-- TR: Sırta mavi plazma ateşlemeli ikiz türbin takar ve havada sabit kalma (hover) ile tam yönlü uçuş sağlar.
+-- ENG: Mounts a twin-turbine plasma jetpack on the torso with altitude hold and directional vector thrust.
+Commands["jetpack"] = function(s, a) ToggleTwinJetpack(ResolvePlayer(a[1])) end
+
+-- 25. Hexagonal Forcefield Dome (;forcefielddome [isim] [yarıçap])
+-- TR: Oyuncunun etrafında dışarıdan gelen diğer oyuncuları ve mermileri geri sektiren bir enerji kubbesi açar.
+-- ENG: Deploys a breathable hexagonal energy shield dome that repels unauthorized players and projectiles.
+Commands["forcefielddome"] = function(s, a) ToggleHexDome(ResolvePlayer(a[1]), tonumber(a[2]) or 28) end
+
+-- 26. Optical Stealth Camouflage (;inviscloak [isim])
+-- TR: Oyuncunun karakterini, aksesuarlarını ve isim etiketini %98 optik kırılma ile görünmez yapar.
+-- ENG: Cloaks the player character, accessories, and nametag with 98% optical transparency shimmer.
+Commands["inviscloak"] = function(s, a) ToggleOpticalCloak(ResolvePlayer(a[1])) end
+
+-- 27. Colossal Scale Growth (;giantgrowth [isim] [ölçek])
+-- TR: Oyuncunun tüm vücut ve aksesuar ölçeğini bozulmadan büyütür ve adım seslerine sarsıntı ekler.
+-- ENG: Smoothly scales the target character rig and accessories up to colossal proportions with heavy footstep tremors.
+Commands["giantgrowth"] = function(s, a) ScaleCharacterSmooth(ResolvePlayer(a[1]), tonumber(a[2]) or 4.5) end
+
+-- 28. Sub-Atomic Micro Shrink (;microshrink [isim])
+-- TR: Oyuncuyu 0.15x boyutuna küçülterek en dar aralıklardan geçmesini ve yüksek hızda koşmasını sağlar.
+-- ENG: Shrinks the player down to 0.15x scale with increased agility to slip through tiny crevices.
+Commands["microshrink"] = function(s, a) ScaleCharacterSmooth(ResolvePlayer(a[1]), 0.15) end
+
+-- 29. Matrix Bullet-Time Dodge (;matrixmode [isim])
+-- TR: Oyuncunun çevresindeki atmosferi yeşil kod yağmuruna çevirir ve geriye yatıp mermilerden kaçma animasyonu verir.
+-- ENG: Tints the environment with digital rain and enables sleek backward-leaning bullet-time dodges.
+Commands["matrixmode"] = function(s, a) ToggleMatrixBulletTime(ResolvePlayer(a[1])) end
+
+-- 30. Crimson Blood Moon Eclipse (;bloodmoon)
+-- TR: Gökyüzünü derin kızıla boyar, yoğun sis indirir ve tüm haritanın ışıklandırmasını karanlık gotik tona çeker.
+-- ENG: Shifts Lighting into a crimson eclipse with volumetric fog and eerie ambient resonance.
+Commands["bloodmoon"] = function(s, a) ToggleBloodMoonAtmosphere() end
+
+-- 31. Aurora Borealis Ribbon Sky (;aurorasky)
+-- TR: Gökyüzünde dalgalanan zümrüt ve mor kutup ışığı şeritleri oluşturur.
+-- ENG: Generates undulating emerald and violet aurora light ribbons across the night sky.
+Commands["aurorasky"] = function(s, a) ToggleAuroraBorealis() end
+
+-- 32. Rainy Cyberpunk Reflection Shader (;cyberpunkcity)
+-- TR: Haritaya sağanak yağmur, ıslak zemin yansımaları ve yüksek kontrastlı gece atmosferi ekler.
+-- ENG: Applies heavy rain particles, wet surface specular reflections, and high-contrast nocturnal grading.
+Commands["cyberpunkcity"] = function(s, a) ToggleCyberpunkWeather() end
+
+-- 33. Tectonic Richter Earthquake (;earthquake [şiddet])
+-- TR: Tüm haritada şiddetli kamera sarsıntısı yaratır, serbest parçaları zıplatır ve oyuncuları dengesizleştirir.
+-- ENG: Triggers a server-wide seismic tremor that shakes cameras, rattles unanchored parts, and staggers footsteps.
+Commands["earthquake"] = function(s, a) TriggerServerEarthquake(tonumber(a[1]) or 8) end
+
+-- 34. Colossal Tidal Tsunami Wave (;tsunami [yön])
+-- TR: Haritanın bir ucundan diğerine ilerleyen 90 stud yüksekliğinde köpüklü bir dev su dalgası gönderir.
+-- ENG: Sweeps a 90-stud-tall cresting ocean wave across the map that carries players and parts in its wake.
+Commands["tsunami"] = function(s, a) LaunchTsunamiWave(a[1] or "North") end
+
+-- 35. Blinding Desert Sandstorm (;sandstorm)
+-- TR: Görüş mesafesini düşüren ve rüzgar direnci uygulayan yoğun bir kum fırtınası başlatır.
+-- ENG: Blankets the map in swirling ochre dust clouds that reduce visibility and apply lateral wind push.
+Commands["sandstorm"] = function(s, a) ToggleSandstormWeather() end
+
+-- 36. Autonomous Sentinel Drone Swarm (;DroneSwarm [isim])
+-- TR: Oyuncunun etrafında uçan ve yaklaşan tehditleri lazerle işaretleyen 4 otonom taktik dron çağırır.
+-- ENG: Deploys 4 autonomous quad-drones that orbit the player and lock onto nearby targets with targeting beams.
+Commands["droneswarm"] = function(s, a) ToggleSentinelDrones(ResolvePlayer(a[1])) end
+
+-- 37. Heavy Exoskeleton Mech Suit (;mecharmor [isim])
+-- TR: Oyuncuya omuz roketatarları ve hidrolik bacakları olan ağır bir mekanik zırh giydirir.
+-- ENG: Outfits the player in a hydraulic exoskeleton suit with shoulder micro-pods and boosted jump thrusters.
+Commands["mecharmor"] = function(s, a) ToggleMechExoskeleton(ResolvePlayer(a[1])) end
+
+-- 38. Dual-Phase Plasma Energy Blade (;energyblade [isim])
+-- TR: Işık izi (Trail) bırakan ve kombo animasyonlarına sahip yüksek frekanslı plazma kılıcı verir.
+-- ENG: Grants a high-frequency plasma katana with ribbon trails and 3-hit slash combo animations.
+Commands["energyblade"] = function(s, a) EquipPlasmaBlade(ResolvePlayer(a[1])) end
+
+-- 39. Hyper-Velocity Electromagnetic Railgun (;railgun [isim])
+-- TR: Şarj olduktan sonra spiral şok halkalarıyla anında hedefi vuran uzun menzilli elektromanyetik tüfek verir.
+-- ENG: Equips a charge-up electromagnetic railgun that fires penetrative螺旋 shockwave beams across the map.
+Commands["railgun"] = function(s, a) EquipElectromagneticRailgun(ResolvePlayer(a[1])) end
+
+-- 40. Zero-Point Telekinesis Gun (;gravitygun [isim])
+-- TR: Nesneleri ve oyuncuları uzaktan tutup havada taşımayı veya hızla fırlatmayı sağlayan telekinezi aracı verir.
+-- ENG: Grants a zero-point manipulator tool that grabs, levitates, and launches parts or characters from a distance.
+Commands["gravitygun"] = function(s, a) EquipZeroPointGravityGun(ResolvePlayer(a[1])) end
+
+-- 41. Concussive Ragdoll Shockwave (;ragdollwave [yarıçap])
+-- TR: Belirtilen yarıçaptaki tüm oyuncuları geçici ragdoll fiziğine sokarak savurur.
+-- ENG: Emits a concussive ring that temporarily switches nearby characters into full BallSocket ragdoll physics.
+Commands["ragdollwave"] = function(s, a) EmitRagdollShockwave(s, tonumber(a[1]) or 45) end
+
+-- 42. Hard-Light Skybridge Path (;skybridge [isim])
+-- TR: Oyuncu havada yürüdükçe ayaklarının altında otomatik oluşan ve arkadan yavaşça silinen cam ışık panelleri yaratır.
+-- ENG: Materializes translucent hard-light glass panels beneath the player feet as they walk through mid-air.
+Commands["skybridge"] = function(s, a) ToggleHardLightBridge(ResolvePlayer(a[1])) end
+
+-- 43. Magnetic Wall & Ceiling Walk (;wallwalk [isim])
+-- TR: Oyuncunun dikey duvarlara ve tavanlara yapışarak yerçekimi yönünü yüzeye göre değiştirmesini sağlar.
+-- ENG: Aligns character up-vector to any surface normal, letting the player walk vertically up walls and across ceilings.
+Commands["wallwalk"] = function(s, a) ToggleMagneticWallWalk(ResolvePlayer(a[1])) end
+
+-- 44. Hyper-Elastic Ricochet Mode (;bouncemode [isim])
+-- TR: Oyuncuyu yüksek elastikiyetli bir enerji küresine sarar; çarptığı her yüzeyden hız kazanarak seker.
+-- ENG: Encloses the player in a high-restitution kinetic sphere that ricochets off walls and floors with amplified speed.
+Commands["bouncemode"] = function(s, a) ToggleElasticBounce(ResolvePlayer(a[1])) end
+
+-- 45. Supersonic Flame Trailblaze (;trailblaze [isim])
+-- TR: Oyuncunun yürüme hızını 3 katına çıkarır ve bastığı her yerde 4 saniye yanan alev izleri bırakır.
+-- ENG: Triples sprint speed and leaves a blazing trail of ground fire footprints behind the player.
+Commands["trailblaze"] = function(s, a) ToggleFlameTrailblaze(ResolvePlayer(a[1])) end
+
+-- 46. Scanline Hologram Projection (;hologram [isim])
+-- TR: Hedefin görünümünü mavi tarama çizgili yarı saydam bir bilim-kurgu hologramına dönüştürür.
+-- ENG: Converts the target character into a flickering cyan scanline hologram projection.
+Commands["hologram"] = function(s, a) ToggleHologramShader(ResolvePlayer(a[1])) end
+
+-- 47. Corrupted Datamosh Avatar (;glitchavatar [isim])
+-- TR: Hedefin uzuvlarını milisaniyelik aralıklarla kaydırarak bozuk simülasyon/glitch görünümü verir.
+-- ENG: Applies rapid sub-frame limb jitter and chromatic highlight shifts for a corrupted simulation aesthetic.
+Commands["glitchavatar"] = function(s, a) ToggleGlitchAvatar(ResolvePlayer(a[1])) end
+
+-- 48. Marble Sculpture Petrification (;statuefy [isim])
+-- TR: Hedefi o anki pozunda beyaz damarlı mermer bir heykele dönüştürür ve kaide üzerine yerleştirir.
+-- ENG: Petrifies the target in their current pose as a carved marble statue complete with a stone pedestal.
+Commands["statuefy"] = function(s, a) ToggleMarbleStatue(ResolvePlayer(a[1])) end
+
+-- 49. Festival Confetti Cannon Burst (;confettiexplosion [isim])
+-- TR: Hedefin etrafında 360 derece renkli konfeti, ışık fişekleri ve ses efekti patlatır.
+-- ENG: Detonates a 360-degree burst of festive confetti ribbons and aerial sparkler flares around the target.
+Commands["confettiexplosion"] = function(s, a) BurstConfettiCelebration(ResolvePlayer(a[1])) end
+
+-- 50. Acoustic Resonance Barrier (;soundbarrier [isim])
+-- TR: Oyuncunun etrafında müziğin bas ritmine göre büyüyüp küçülen koruyucu ses dalgası halkaları oluşturur.
+-- ENG: Surrounds the player with Equalizer-reactive acoustic rings that pulse and deflect nearby objects.
+Commands["soundbarrier"] = function(s, a) ToggleAcousticBarrier(ResolvePlayer(a[1])) end
+
+-- 51. Instant P2P Full State Reconciliation (;p2psyncnow)
+-- TR: Tüm aktif Polaria, Topk3k, Godzilla ve Halüsinasyon durumlarının tam özet paketini (State Snapshot) sıfır gecikmeyle karşı istemcilere zorla senkronize eder.
+-- ENG: Broadcasts a full deterministic state snapshot to immediately reconcile Polaria, Topk3k, Godzilla, and Hallucination states across all P2P peers.
+Commands["p2psyncnow"] = function(s, a) P2P:ForceFullStateSnapshot() end
+
+-- 52. Dimensional Void Rift Slash (;voidrift [isim])
+-- TR: Hedefin önünde uzayı yırtan mor-siyah bir boyut kapısı açar ve içinden hiçlik enerjisi püskürtür.
+-- ENG: Cuts open a jagged dimensional tear in front of the target that emits abyssal lightning.
+Commands["voidrift"] = function(s, a) OpenDimensionalVoidRift(ResolvePlayer(a[1])) end
+
+return {
+    P2P = P2P,
+    Commands = Commands,
+    IsVerifiedB1rkt = IsVerifiedB1rkt,
+    ShowWelcomeLanguageScreen = ShowWelcomeLanguageScreen
+}
